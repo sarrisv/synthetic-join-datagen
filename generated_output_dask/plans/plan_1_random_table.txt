@@ -1,0 +1,7 @@
+# Execution Plan 1
+# Pattern for Fundamental Joins: random
+# Output Granularity: table
+# Relations in Plan Scope: R0, R1, R2
+# Table-at-a-Time Stages (Binary Joins - Aggregated by Pair):
+R0,R1,attr1
+R0,R2,attr1

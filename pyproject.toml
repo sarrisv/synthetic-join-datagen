@@ -1,0 +1,7 @@
+[project]
+name = "synthetic-join-datagen"
+version = "0.1.0"
+description = "Generates synthetic relation and join execution plan datasets"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["dask[complete]>=2025.5.1"]

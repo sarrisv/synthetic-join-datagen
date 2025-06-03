@@ -1,0 +1,7 @@
+# Execution Plan 2
+# Pattern for Fundamental Joins: star
+# Output Granularity: attribute
+# Relations in Plan Scope: R0, R1, R2
+# Attribute-at-a-Time Stages (Multi-way Joins per Attribute):
+attr0,R0,R2
+attr2,R0,R1

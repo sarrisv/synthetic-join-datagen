@@ -1,0 +1,162 @@
+================================================================================
+JOIN SELECTIVITY ANALYSIS REPORT
+================================================================================
+
+Total Plans Analyzed: 8
+
+OVERALL STATISTICS BY EXECUTION MODEL:
+--------------------------------------------------
+Table-at-a-Time Plans (4 plans):
+  Average Selectivity: 0.8806
+  Median Selectivity: 0.8525
+  Std Dev: 0.1017
+
+Attribute-at-a-Time Plans (4 plans):
+  Average Selectivity: 0.8731
+  Median Selectivity: 0.9000
+  Std Dev: 0.1146
+
+PLAN 0 (random, attribute) - ATTRIBUTE-AT-A-TIME\n----------------------------------------------------------------------\nRelations in Scope: R0, R1, R2
+Average Selectivity: 0.7533
+Total Estimated Result Size: 75
+
+Multi-way Join Stages (1 attributes):
+  Multi-way join on attr1:
+    Participating relations: R0, R1, R2
+    Relation sizes: R0:100, R1:100, R2:100
+    Common values across all relations: 30
+    Per-relation selectivities: R0:0.7600, R1:0.7500, R2:0.7500
+    Estimated result size: 75
+    Reduction factor: 0.000075
+
+
+PLAN 0 (random, table) - TABLE-AT-A-TIME\n----------------------------------------------------------------------\nRelations in Scope: R0, R1, R2
+Average Selectivity: 0.7825
+Total Estimated Result Size: 464
+
+Binary Join Stages (2 joins):
+  R0 ⋈ R1 on attr1:
+    Table sizes: 100 × 100
+    Distinct values: 37 ∩ 35 = 33
+    Selectivities: 0.8000, 0.7800
+    Estimated join size: 242
+    Reduction factor: 0.024200
+
+  R1 ⋈ R2 on attr1:
+    Table sizes: 100 × 100
+    Distinct values: 35 ∩ 34 = 32
+    Selectivities: 0.7700, 0.7800
+    Estimated join size: 222
+    Reduction factor: 0.022200
+
+
+PLAN 1 (random, attribute) - ATTRIBUTE-AT-A-TIME\n----------------------------------------------------------------------\nRelations in Scope: R0, R1, R2
+Average Selectivity: 0.7533
+Total Estimated Result Size: 75
+
+Multi-way Join Stages (1 attributes):
+  Multi-way join on attr1:
+    Participating relations: R0, R1, R2
+    Relation sizes: R0:100, R1:100, R2:100
+    Common values across all relations: 30
+    Per-relation selectivities: R0:0.7600, R1:0.7500, R2:0.7500
+    Estimated result size: 75
+    Reduction factor: 0.000075
+
+
+PLAN 1 (random, table) - TABLE-AT-A-TIME\n----------------------------------------------------------------------\nRelations in Scope: R0, R1, R2
+Average Selectivity: 0.7825
+Total Estimated Result Size: 458
+
+Binary Join Stages (2 joins):
+  R0 ⋈ R1 on attr1:
+    Table sizes: 100 × 100
+    Distinct values: 37 ∩ 35 = 33
+    Selectivities: 0.8000, 0.7800
+    Estimated join size: 242
+    Reduction factor: 0.024200
+
+  R0 ⋈ R2 on attr1:
+    Table sizes: 100 × 100
+    Distinct values: 37 ∩ 34 = 31
+    Selectivities: 0.7700, 0.7800
+    Estimated join size: 216
+    Reduction factor: 0.021600
+
+
+PLAN 2 (star, attribute) - ATTRIBUTE-AT-A-TIME\n----------------------------------------------------------------------\nRelations in Scope: R0, R1, R2
+Average Selectivity: 0.9575
+Total Estimated Result Size: 190
+
+Multi-way Join Stages (2 attributes):
+  Multi-way join on attr0:
+    Participating relations: R0, R2
+    Relation sizes: R0:100, R2:100
+    Common values across all relations: 100
+    Per-relation selectivities: R0:1.0000, R2:1.0000
+    Estimated result size: 100
+    Reduction factor: 0.010000
+
+  Multi-way join on attr2:
+    Participating relations: R0, R1
+    Relation sizes: R0:100, R1:100
+    Common values across all relations: 36
+    Per-relation selectivities: R0:0.9000, R1:0.9300
+    Estimated result size: 90
+    Reduction factor: 0.009000
+
+
+PLAN 2 (star, table) - TABLE-AT-A-TIME\n----------------------------------------------------------------------\nRelations in Scope: R0, R1, R2
+Average Selectivity: 0.9575
+Total Estimated Result Size: 380
+
+Binary Join Stages (2 joins):
+  R0 ⋈ R1 on attr2:
+    Table sizes: 100 × 100
+    Distinct values: 39 ∩ 38 = 36
+    Selectivities: 0.9000, 0.9300
+    Estimated join size: 280
+    Reduction factor: 0.028000
+
+  R0 ⋈ R2 on attr0:
+    Table sizes: 100 × 100
+    Distinct values: 100 ∩ 100 = 100
+    Selectivities: 1.0000, 1.0000
+    Estimated join size: 100
+    Reduction factor: 0.010000
+
+
+PLAN 3 (star, attribute) - ATTRIBUTE-AT-A-TIME\n----------------------------------------------------------------------\nRelations in Scope: R0, R1, R2
+Average Selectivity: 1.0000
+Total Estimated Result Size: 100
+
+Multi-way Join Stages (1 attributes):
+  Multi-way join on attr0:
+    Participating relations: R0, R1, R2
+    Relation sizes: R0:100, R1:100, R2:100
+    Common values across all relations: 100
+    Per-relation selectivities: R0:1.0000, R1:1.0000, R2:1.0000
+    Estimated result size: 100
+    Reduction factor: 0.000100
+
+
+PLAN 3 (star, table) - TABLE-AT-A-TIME\n----------------------------------------------------------------------\nRelations in Scope: R0, R1, R2
+Average Selectivity: 1.0000
+Total Estimated Result Size: 200
+
+Binary Join Stages (2 joins):
+  R0 ⋈ R1 on attr0:
+    Table sizes: 100 × 100
+    Distinct values: 100 ∩ 100 = 100
+    Selectivities: 1.0000, 1.0000
+    Estimated join size: 100
+    Reduction factor: 0.010000
+
+  R0 ⋈ R2 on attr0:
+    Table sizes: 100 × 100
+    Distinct values: 100 ∩ 100 = 100
+    Selectivities: 1.0000, 1.0000
+    Estimated join size: 100
+    Reduction factor: 0.010000
+
+

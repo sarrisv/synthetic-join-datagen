@@ -1,0 +1,27 @@
+# test_config.toml
+# Simple test configuration for quick validation
+
+[data_generation]
+relations = 3
+attributes = 3
+unique-tuples = 100
+duplication-factor = 1
+distribution = "normal"
+domain-size = 50
+null-percentage = 0.1
+data-output-format = "csv"
+
+[plan_generation]
+plans = 2
+join-pattern = ["random", "star"]
+plan-granularity = ["table", "attribute"]
+plan-output-format = ["txt"]
+generate-dot-visualization = false
+
+[common]
+seed = 42
+base-output-dir = "test_output"
+
+[analysis]
+run-analysis = true
+run-on-the-fly-analysis = true

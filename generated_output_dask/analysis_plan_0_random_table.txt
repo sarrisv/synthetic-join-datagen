@@ -1,0 +1,27 @@
+================================================================================
+INDIVIDUAL PLAN ANALYSIS REPORT
+================================================================================
+
+PLAN 0 (random, table) - TABLE-AT-A-TIME
+----------------------------------------------------------------------
+Relations in Scope: R0, R1, R2
+Average Selectivity: 0.7825
+Total Estimated Result Size: 464
+
+Binary Join Stages (2 joins):
+  R0 ⋈ R1 on attr1:
+    Table sizes: 100 × 100
+    Distinct values: 37 ∩ 35 = 33
+    Selectivities: 0.8000, 0.7800
+    Estimated join size: 242
+    Reduction factor: 0.024200
+
+  R1 ⋈ R2 on attr1:
+    Table sizes: 100 × 100
+    Distinct values: 35 ∩ 34 = 32
+    Selectivities: 0.7700, 0.7800
+    Estimated join size: 222
+    Reduction factor: 0.022200
+
+
+Generated at: generated_output_dask/analysis_plan_0_random_table.txt

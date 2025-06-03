@@ -1,0 +1,21 @@
+================================================================================
+INDIVIDUAL PLAN ANALYSIS REPORT
+================================================================================
+
+PLAN 0 (random, attribute) - ATTRIBUTE-AT-A-TIME
+----------------------------------------------------------------------
+Relations in Scope: R0, R1, R2
+Average Selectivity: 0.7533
+Total Estimated Result Size: 75
+
+Multi-way Join Stages (1 attributes):
+  Multi-way join on attr1:
+    Participating relations: R0, R1, R2
+    Relation sizes: R0:100, R1:100, R2:100
+    Common values across all relations: 30
+    Per-relation selectivities: R0:0.7600, R1:0.7500, R2:0.7500
+    Estimated result size: 75
+    Reduction factor: 0.000075
+
+
+Generated at: generated_output_dask/analysis_plan_0_random_attribute.txt
