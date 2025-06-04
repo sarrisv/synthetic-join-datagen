@@ -1,18 +1,12 @@
-# analysis_module.py
-"""
-Provides analysis capabilities for generated data and join plans,
-including selectivity computation, join size estimation, and reporting.
-"""
-
-import pathlib
-import logging
 import json
-import pandas as pd
-import numpy as np
-from typing import List, Dict, Any, Optional, Tuple, Set
+import logging
+import pathlib
 from collections import defaultdict
 from dataclasses import dataclass
-import re
+from typing import List, Dict, Tuple
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +14,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class JoinSpec:
     """Specification for a single join operation."""
+
     table1: str
     table2: str
     join_attribute: str
@@ -29,6 +24,7 @@ class JoinSpec:
 @dataclass
 class JoinSelectivity:
     """Results of selectivity analysis for a join."""
+
     table1: str
     table2: str
     join_attribute: str
@@ -43,8 +39,8 @@ class JoinSelectivity:
     # Selectivity metrics
     table1_selectivity: float  # Fraction of table1 tuples that will participate
     table2_selectivity: float  # Fraction of table2 tuples that will participate
-    estimated_join_size: int   # Estimated number of result tuples
-    reduction_factor: float    # Join size / (table1_size * table2_size)
+    estimated_join_size: int  # Estimated number of result tuples
+    reduction_factor: float  # Join size / (table1_size * table2_size)
 
     # Distribution properties
     table1_null_count: int
@@ -54,6 +50,7 @@ class JoinSelectivity:
 @dataclass
 class AttributeStageAnalysis:
     """Analysis for attribute-at-a-time multi-way join stage."""
+
     join_attribute: str
     participating_relations: List[str]
     relation_sizes: Dict[str, int]
@@ -67,6 +64,7 @@ class AttributeStageAnalysis:
 @dataclass
 class PlanAnalysis:
     """Complete analysis results for a single execution plan."""
+
     plan_id: int
     pattern: str
     granularity: str
@@ -82,7 +80,9 @@ class PlanAnalysis:
     execution_model: str  # "table-at-a-time" or "attribute-at-a-time"
 
 
-def load_relation_data(data_path: pathlib.Path, relation_name: str, format_name: str) -> pd.DataFrame:
+def load_relation_data(
+    data_path: pathlib.Path, relation_name: str, format_name: str
+) -> pd.DataFrame:
     """Load relation data from file."""
     if format_name == "csv":
         file_path = data_path / f"{relation_name}.csv"
@@ -102,56 +102,60 @@ def parse_plan_file(plan_path: pathlib.Path) -> Tuple[Dict[str, str], List[JoinS
     metadata = {}
     joins = []
 
-    with open(plan_path, 'r') as f:
+    with open(plan_path, "r") as f:
         content = f.read()
 
-    lines = content.strip().split('\n')
+    lines = content.strip().split("\n")
 
     # Parse metadata from header comments
     for line in lines:
         line = line.strip()
-        if line.startswith('# Execution Plan'):
-            metadata['plan_id'] = line.split()[-1]
-        elif line.startswith('# Pattern for Fundamental Joins:'):
-            metadata['pattern'] = line.split(': ', 1)[1]
-        elif line.startswith('# Output Granularity:'):
-            metadata['granularity'] = line.split(': ', 1)[1]
-        elif line.startswith('# Relations in Plan Scope:'):
-            scope_part = line.split(': ', 1)[1]
-            if scope_part.strip() == 'None':
-                metadata['relations_in_scope'] = []
+        if line.startswith("# Execution Plan"):
+            metadata["plan_id"] = line.split()[-1]
+        elif line.startswith("# Pattern for Fundamental Joins:"):
+            metadata["pattern"] = line.split(": ", 1)[1]
+        elif line.startswith("# Output Granularity:"):
+            metadata["granularity"] = line.split(": ", 1)[1]
+        elif line.startswith("# Relations in Plan Scope:"):
+            scope_part = line.split(": ", 1)[1]
+            if scope_part.strip() == "None":
+                metadata["relations_in_scope"] = []
             else:
-                metadata['relations_in_scope'] = [r.strip() for r in scope_part.split(',')]
+                metadata["relations_in_scope"] = [
+                    r.strip() for r in scope_part.split(",")
+                ]
 
     # Parse join specifications
     parsing_joins = False
     for line in lines:
         line = line.strip()
 
-        if 'Stages' in line and ('Binary Joins' in line or 'Multi-way Joins' in line):
+        if "Stages" in line and ("Binary Joins" in line or "Multi-way Joins" in line):
             parsing_joins = True
             continue
 
-        if parsing_joins and line and not line.startswith('#'):
+        if parsing_joins and line and not line.startswith("#"):
             # Parse join line - format depends on granularity
-            if metadata.get('granularity') == 'table':
+            if metadata.get("granularity") == "table":
                 # Format: R0,R2,attr3
-                parts = line.split(',')
+                parts = line.split(",")
                 if len(parts) >= 3:
                     table1, table2 = parts[0], parts[1]
                     # Multiple join attributes possible
                     for attr in parts[2:]:
                         joins.append(JoinSpec(table1, table2, attr.strip()))
-            elif metadata.get('granularity') == 'attribute':
+            elif metadata.get("granularity") == "attribute":
                 # Format: attr1,R0,R1,R2 (attribute followed by participating relations)
-                parts = line.split(',')
+                parts = line.split(",")
                 if len(parts) >= 3:
                     join_attr = parts[0]
                     relations = [r.strip() for r in parts[1:]]
                     # Create pairwise joins for all relations in this attribute stage
                     for i in range(len(relations)):
                         for j in range(i + 1, len(relations)):
-                            joins.append(JoinSpec(relations[i], relations[j], join_attr))
+                            joins.append(
+                                JoinSpec(relations[i], relations[j], join_attr)
+                            )
 
     return metadata, joins
 
@@ -159,7 +163,7 @@ def parse_plan_file(plan_path: pathlib.Path) -> Tuple[Dict[str, str], List[JoinS
 def compute_attribute_stage_selectivity(
     relation_data: Dict[str, pd.DataFrame],
     join_attribute: str,
-    participating_relations: List[str]
+    participating_relations: List[str],
 ) -> AttributeStageAnalysis:
     """Compute selectivity metrics for attribute-at-a-time multi-way join."""
 
@@ -183,7 +187,9 @@ def compute_attribute_stage_selectivity(
 
     # Find values common across ALL participating relations
     if relation_values:
-        common_values = set.intersection(*relation_values.values()) if relation_values else set()
+        common_values = (
+            set.intersection(*relation_values.values()) if relation_values else set()
+        )
     else:
         common_values = set()
 
@@ -195,8 +201,12 @@ def compute_attribute_stage_selectivity(
         if rel_name in relation_data and relation_sizes[rel_name] > 0:
             rel_data = relation_data[rel_name]
             if join_attribute in rel_data.columns:
-                participating_tuples = rel_data[join_attribute].isin(common_values).sum()
-                selectivities[rel_name] = participating_tuples / relation_sizes[rel_name]
+                participating_tuples = (
+                    rel_data[join_attribute].isin(common_values).sum()
+                )
+                selectivities[rel_name] = (
+                    participating_tuples / relation_sizes[rel_name]
+                )
             else:
                 selectivities[rel_name] = 0.0
         else:
@@ -206,7 +216,7 @@ def compute_attribute_stage_selectivity(
     # Use worst-case optimal bound: min over relations of |R| * |common_values|
     estimated_result_size = 0
     if common_values_count > 0:
-        min_contribution = float('inf')
+        min_contribution = float("inf")
         for rel_name in participating_relations:
             if rel_name in relation_data:
                 rel_data = relation_data[rel_name]
@@ -217,7 +227,7 @@ def compute_attribute_stage_selectivity(
                         contribution += count
                     min_contribution = min(min_contribution, contribution)
 
-        if min_contribution != float('inf'):
+        if min_contribution != float("inf"):
             estimated_result_size = min_contribution
 
     # Reduction factor compared to Cartesian product
@@ -225,7 +235,9 @@ def compute_attribute_stage_selectivity(
     for rel_name in participating_relations:
         cartesian_size *= relation_sizes.get(rel_name, 1)
 
-    reduction_factor = estimated_result_size / cartesian_size if cartesian_size > 0 else 0.0
+    reduction_factor = (
+        estimated_result_size / cartesian_size if cartesian_size > 0 else 0.0
+    )
 
     return AttributeStageAnalysis(
         join_attribute=join_attribute,
@@ -235,14 +247,12 @@ def compute_attribute_stage_selectivity(
         common_values_across_all=common_values_count,
         selectivities=selectivities,
         estimated_result_size=estimated_result_size,
-        reduction_factor=reduction_factor
+        reduction_factor=reduction_factor,
     )
 
 
 def compute_join_selectivity(
-    table1_data: pd.DataFrame,
-    table2_data: pd.DataFrame,
-    join_spec: JoinSpec
+    table1_data: pd.DataFrame, table2_data: pd.DataFrame, join_spec: JoinSpec
 ) -> JoinSelectivity:
     """Compute selectivity metrics for a specific join."""
 
@@ -294,7 +304,9 @@ def compute_join_selectivity(
 
     # Reduction factor
     cartesian_size = table1_size * table2_size
-    reduction_factor = estimated_join_size / cartesian_size if cartesian_size > 0 else 0.0
+    reduction_factor = (
+        estimated_join_size / cartesian_size if cartesian_size > 0 else 0.0
+    )
 
     return JoinSelectivity(
         table1=join_spec.table1,
@@ -315,9 +327,7 @@ def compute_join_selectivity(
 
 
 def analyze_single_plan(
-    plan_path: pathlib.Path,
-    data_path: pathlib.Path,
-    data_format: str
+    plan_path: pathlib.Path, data_path: pathlib.Path, data_format: str
 ) -> PlanAnalysis:
     """Analyze a single execution plan file."""
 
@@ -326,15 +336,17 @@ def analyze_single_plan(
 
     # Parse the plan file
     metadata, join_specs = parse_plan_file(plan_path)
-    granularity = metadata.get('granularity', 'unknown')
+    granularity = metadata.get("granularity", "unknown")
 
     # Load relation data
-    relations_in_scope = metadata.get('relations_in_scope', [])
+    relations_in_scope = metadata.get("relations_in_scope", [])
     relation_data = {}
 
     for relation in relations_in_scope:
         try:
-            relation_data[relation] = load_relation_data(data_path, relation, data_format)
+            relation_data[relation] = load_relation_data(
+                data_path, relation, data_format
+            )
         except Exception as e:
             plan_logger.warning(f"Could not load data for relation {relation}: {e}")
             continue
@@ -342,7 +354,7 @@ def analyze_single_plan(
     join_selectivities = []
     attribute_stages = []
 
-    if granularity == 'table':
+    if granularity == "table":
         # Table-at-a-time: analyze binary joins
         for join_spec in join_specs:
             if join_spec.table1 in relation_data and join_spec.table2 in relation_data:
@@ -350,15 +362,19 @@ def analyze_single_plan(
                     selectivity = compute_join_selectivity(
                         relation_data[join_spec.table1],
                         relation_data[join_spec.table2],
-                        join_spec
+                        join_spec,
                     )
                     join_selectivities.append(selectivity)
                 except Exception as e:
-                    plan_logger.warning(f"Could not compute selectivity for join {join_spec.table1}-{join_spec.table2} on {join_spec.join_attribute}: {e}")
+                    plan_logger.warning(
+                        f"Could not compute selectivity for join {join_spec.table1}-{join_spec.table2} on {join_spec.join_attribute}: {e}"
+                    )
             else:
-                plan_logger.warning(f"Missing data for join {join_spec.table1}-{join_spec.table2}")
+                plan_logger.warning(
+                    f"Missing data for join {join_spec.table1}-{join_spec.table2}"
+                )
 
-    elif granularity == 'attribute':
+    elif granularity == "attribute":
         # Attribute-at-a-time: analyze multi-way joins per attribute
         # Group joins by attribute
         attribute_groups = defaultdict(set)
@@ -374,10 +390,12 @@ def analyze_single_plan(
                 )
                 attribute_stages.append(stage_analysis)
             except Exception as e:
-                plan_logger.warning(f"Could not compute attribute stage selectivity for {attr}: {e}")
+                plan_logger.warning(
+                    f"Could not compute attribute stage selectivity for {attr}: {e}"
+                )
 
     # Compute aggregate metrics based on granularity
-    if granularity == 'table' and join_selectivities:
+    if granularity == "table" and join_selectivities:
         selectivity_values = [
             (s.table1_selectivity + s.table2_selectivity) / 2
             for s in join_selectivities
@@ -387,7 +405,7 @@ def analyze_single_plan(
         min_selectivity = np.min(selectivity_values)
         total_intermediate_size = sum(s.estimated_join_size for s in join_selectivities)
         execution_model = "table-at-a-time"
-    elif granularity == 'attribute' and attribute_stages:
+    elif granularity == "attribute" and attribute_stages:
         # For attribute granularity, compute average selectivity across all relations in all stages
         all_selectivities = []
         for stage in attribute_stages:
@@ -408,8 +426,8 @@ def analyze_single_plan(
         execution_model = "unknown"
 
     return PlanAnalysis(
-        plan_id=int(metadata.get('plan_id', 0)),
-        pattern=metadata.get('pattern', 'unknown'),
+        plan_id=int(metadata.get("plan_id", 0)),
+        pattern=metadata.get("pattern", "unknown"),
         granularity=granularity,
         relations_in_scope=relations_in_scope,
         joins=join_selectivities,
@@ -422,14 +440,16 @@ def analyze_single_plan(
     )
 
 
-def generate_analysis_report(analyses: List[PlanAnalysis], output_path: pathlib.Path) -> None:
+def generate_analysis_report(
+    analyses: List[PlanAnalysis], output_path: pathlib.Path
+) -> None:
     """Generate a comprehensive analysis report."""
 
     report_path = output_path / "selectivity_analysis_report.txt"
     json_path = output_path / "selectivity_analysis_data.json"
 
     # Generate text report
-    with open(report_path, 'w') as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         f.write("=" * 80 + "\n")
         f.write("JOIN SELECTIVITY ANALYSIS REPORT\n")
         f.write("=" * 80 + "\n\n")
@@ -438,7 +458,9 @@ def generate_analysis_report(analyses: List[PlanAnalysis], output_path: pathlib.
 
         # Summary statistics by execution model
         table_analyses = [a for a in analyses if a.execution_model == "table-at-a-time"]
-        attribute_analyses = [a for a in analyses if a.execution_model == "attribute-at-a-time"]
+        attribute_analyses = [
+            a for a in analyses if a.execution_model == "attribute-at-a-time"
+        ]
 
         if table_analyses or attribute_analyses:
             f.write("OVERALL STATISTICS BY EXECUTION MODEL:\n")
@@ -447,15 +469,21 @@ def generate_analysis_report(analyses: List[PlanAnalysis], output_path: pathlib.
             if table_analyses:
                 table_selectivities = []
                 for analysis in table_analyses:
-                    table_selectivities.extend([
-                        (s.table1_selectivity + s.table2_selectivity) / 2
-                        for s in analysis.joins
-                    ])
+                    table_selectivities.extend(
+                        [
+                            (s.table1_selectivity + s.table2_selectivity) / 2
+                            for s in analysis.joins
+                        ]
+                    )
 
                 if table_selectivities:
                     f.write(f"Table-at-a-Time Plans ({len(table_analyses)} plans):\n")
-                    f.write(f"  Average Selectivity: {np.mean(table_selectivities):.4f}\n")
-                    f.write(f"  Median Selectivity: {np.median(table_selectivities):.4f}\n")
+                    f.write(
+                        f"  Average Selectivity: {np.mean(table_selectivities):.4f}\n"
+                    )
+                    f.write(
+                        f"  Median Selectivity: {np.median(table_selectivities):.4f}\n"
+                    )
                     f.write(f"  Std Dev: {np.std(table_selectivities):.4f}\n\n")
 
             if attribute_analyses:
@@ -465,38 +493,71 @@ def generate_analysis_report(analyses: List[PlanAnalysis], output_path: pathlib.
                         attr_selectivities.extend(stage.selectivities.values())
 
                 if attr_selectivities:
-                    f.write(f"Attribute-at-a-Time Plans ({len(attribute_analyses)} plans):\n")
-                    f.write(f"  Average Selectivity: {np.mean(attr_selectivities):.4f}\n")
-                    f.write(f"  Median Selectivity: {np.median(attr_selectivities):.4f}\n")
+                    f.write(
+                        f"Attribute-at-a-Time Plans ({len(attribute_analyses)} plans):\n"
+                    )
+                    f.write(
+                        f"  Average Selectivity: {np.mean(attr_selectivities):.4f}\n"
+                    )
+                    f.write(
+                        f"  Median Selectivity: {np.median(attr_selectivities):.4f}\n"
+                    )
                     f.write(f"  Std Dev: {np.std(attr_selectivities):.4f}\n\n")
 
         # Per-plan details
         for analysis in analyses:
-            f.write(f"PLAN {analysis.plan_id} ({analysis.pattern}, {analysis.granularity}) - {analysis.execution_model.upper()}\\n")
+            f.write(
+                f"PLAN {analysis.plan_id} ({analysis.pattern}, {analysis.granularity}) - {analysis.execution_model.upper()}\\n"
+            )
             f.write("-" * 70 + "\\n")
             f.write(f"Relations in Scope: {', '.join(analysis.relations_in_scope)}\n")
             f.write(f"Average Selectivity: {analysis.average_selectivity:.4f}\n")
-            f.write(f"Total Estimated Result Size: {analysis.total_estimated_intermediate_size:,}\n\n")
+            f.write(
+                f"Total Estimated Result Size: {analysis.total_estimated_intermediate_size:,}\n\n"
+            )
 
             if analysis.execution_model == "table-at-a-time" and analysis.joins:
                 f.write(f"Binary Join Stages ({len(analysis.joins)} joins):\n")
                 for join in analysis.joins:
-                    f.write(f"  {join.table1} ⋈ {join.table2} on {join.join_attribute}:\n")
-                    f.write(f"    Table sizes: {join.table1_size:,} × {join.table2_size:,}\n")
-                    f.write(f"    Distinct values: {join.table1_distinct_values} ∩ {join.table2_distinct_values} = {join.common_values}\n")
-                    f.write(f"    Selectivities: {join.table1_selectivity:.4f}, {join.table2_selectivity:.4f}\n")
+                    f.write(
+                        f"  {join.table1} ⋈ {join.table2} on {join.join_attribute}:\n"
+                    )
+                    f.write(
+                        f"    Table sizes: {join.table1_size:,} × {join.table2_size:,}\n"
+                    )
+                    f.write(
+                        f"    Distinct values: {join.table1_distinct_values} ∩ {join.table2_distinct_values} = {join.common_values}\n"
+                    )
+                    f.write(
+                        f"    Selectivities: {join.table1_selectivity:.4f}, {join.table2_selectivity:.4f}\n"
+                    )
                     f.write(f"    Estimated join size: {join.estimated_join_size:,}\n")
                     f.write(f"    Reduction factor: {join.reduction_factor:.6f}\n\n")
 
-            elif analysis.execution_model == "attribute-at-a-time" and analysis.attribute_stages:
-                f.write(f"Multi-way Join Stages ({len(analysis.attribute_stages)} attributes):\n")
+            elif (
+                analysis.execution_model == "attribute-at-a-time"
+                and analysis.attribute_stages
+            ):
+                f.write(
+                    f"Multi-way Join Stages ({len(analysis.attribute_stages)} attributes):\n"
+                )
                 for stage in analysis.attribute_stages:
                     f.write(f"  Multi-way join on {stage.join_attribute}:\n")
-                    f.write(f"    Participating relations: {', '.join(stage.participating_relations)}\n")
-                    f.write(f"    Relation sizes: {', '.join([f'{r}:{s:,}' for r, s in stage.relation_sizes.items()])}\n")
-                    f.write(f"    Common values across all relations: {stage.common_values_across_all}\n")
-                    f.write(f"    Per-relation selectivities: {', '.join([f'{r}:{s:.4f}' for r, s in stage.selectivities.items()])}\n")
-                    f.write(f"    Estimated result size: {stage.estimated_result_size:,}\n")
+                    f.write(
+                        f"    Participating relations: {', '.join(stage.participating_relations)}\n"
+                    )
+                    f.write(
+                        f"    Relation sizes: {', '.join([f'{r}:{s:,}' for r, s in stage.relation_sizes.items()])}\n"
+                    )
+                    f.write(
+                        f"    Common values across all relations: {stage.common_values_across_all}\n"
+                    )
+                    f.write(
+                        f"    Per-relation selectivities: {', '.join([f'{r}:{s:.4f}' for r, s in stage.selectivities.items()])}\n"
+                    )
+                    f.write(
+                        f"    Estimated result size: {stage.estimated_result_size:,}\n"
+                    )
                     f.write(f"    Reduction factor: {stage.reduction_factor:.6f}\n\n")
 
             f.write("\n")
@@ -517,7 +578,7 @@ def generate_analysis_report(analyses: List[PlanAnalysis], output_path: pathlib.
                 "min_selectivity": analysis.min_selectivity,
             },
             "joins": [],
-            "attribute_stages": []
+            "attribute_stages": [],
         }
 
         # Add binary joins for table-at-a-time
@@ -572,60 +633,91 @@ def generate_analysis_report(analyses: List[PlanAnalysis], output_path: pathlib.
 
     json_data_converted = convert_numpy_types(json_data)
 
-    with open(json_path, 'w') as f:
+    with open(json_path, "w", encoding="utf-8") as f:
         json.dump(json_data_converted, f, indent=2)
 
     logger.info(f"Analysis report written to: {report_path}")
     logger.info(f"Analysis data written to: {json_path}")
 
 
-def generate_individual_analysis_report(analysis: PlanAnalysis, output_path: pathlib.Path) -> None:
+def generate_individual_analysis_report(
+    analysis: PlanAnalysis, output_path: pathlib.Path
+) -> None:
     """Generate an individual analysis report for a single plan."""
 
     try:
-        with open(output_path, 'w') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write("=" * 80 + "\n")
-            f.write(f"INDIVIDUAL PLAN ANALYSIS REPORT\n")
+            f.write("INDIVIDUAL PLAN ANALYSIS REPORT\n")
             f.write("=" * 80 + "\n\n")
 
-            f.write(f"PLAN {analysis.plan_id} ({analysis.pattern}, {analysis.granularity}) - {analysis.execution_model.upper()}\n")
+            f.write(
+                f"PLAN {analysis.plan_id} ({analysis.pattern}, {analysis.granularity}) - {analysis.execution_model.upper()}\n"
+            )
             f.write("-" * 70 + "\n")
             f.write(f"Relations in Scope: {', '.join(analysis.relations_in_scope)}\n")
             f.write(f"Average Selectivity: {analysis.average_selectivity:.4f}\n")
-            f.write(f"Total Estimated Result Size: {analysis.total_estimated_intermediate_size:,}\n\n")
+            f.write(
+                f"Total Estimated Result Size: {analysis.total_estimated_intermediate_size:,}\n\n"
+            )
 
             if analysis.execution_model == "table-at-a-time" and analysis.joins:
                 f.write(f"Binary Join Stages ({len(analysis.joins)} joins):\n")
                 for join in analysis.joins:
-                    f.write(f"  {join.table1} ⋈ {join.table2} on {join.join_attribute}:\n")
-                    f.write(f"    Table sizes: {join.table1_size:,} × {join.table2_size:,}\n")
-                    f.write(f"    Distinct values: {join.table1_distinct_values} ∩ {join.table2_distinct_values} = {join.common_values}\n")
-                    f.write(f"    Selectivities: {join.table1_selectivity:.4f}, {join.table2_selectivity:.4f}\n")
+                    f.write(
+                        f"  {join.table1} ⋈ {join.table2} on {join.join_attribute}:\n"
+                    )
+                    f.write(
+                        f"    Table sizes: {join.table1_size:,} × {join.table2_size:,}\n"
+                    )
+                    f.write(
+                        f"    Distinct values: {join.table1_distinct_values} ∩ {join.table2_distinct_values} = {join.common_values}\n"
+                    )
+                    f.write(
+                        f"    Selectivities: {join.table1_selectivity:.4f}, {join.table2_selectivity:.4f}\n"
+                    )
                     f.write(f"    Estimated join size: {join.estimated_join_size:,}\n")
                     f.write(f"    Reduction factor: {join.reduction_factor:.6f}\n\n")
 
-            elif analysis.execution_model == "attribute-at-a-time" and analysis.attribute_stages:
-                f.write(f"Multi-way Join Stages ({len(analysis.attribute_stages)} attributes):\n")
+            elif (
+                analysis.execution_model == "attribute-at-a-time"
+                and analysis.attribute_stages
+            ):
+                f.write(
+                    f"Multi-way Join Stages ({len(analysis.attribute_stages)} attributes):\n"
+                )
                 for stage in analysis.attribute_stages:
                     f.write(f"  Multi-way join on {stage.join_attribute}:\n")
-                    f.write(f"    Participating relations: {', '.join(stage.participating_relations)}\n")
-                    f.write(f"    Relation sizes: {', '.join([f'{r}:{s:,}' for r, s in stage.relation_sizes.items()])}\n")
-                    f.write(f"    Common values across all relations: {stage.common_values_across_all}\n")
-                    f.write(f"    Per-relation selectivities: {', '.join([f'{r}:{s:.4f}' for r, s in stage.selectivities.items()])}\n")
-                    f.write(f"    Estimated result size: {stage.estimated_result_size:,}\n")
+                    f.write(
+                        f"    Participating relations: {', '.join(stage.participating_relations)}\n"
+                    )
+                    f.write(
+                        f"    Relation sizes: {', '.join([f'{r}:{s:,}' for r, s in stage.relation_sizes.items()])}\n"
+                    )
+                    f.write(
+                        f"    Common values across all relations: {stage.common_values_across_all}\n"
+                    )
+                    f.write(
+                        f"    Per-relation selectivities: {', '.join([f'{r}:{s:.4f}' for r, s in stage.selectivities.items()])}\n"
+                    )
+                    f.write(
+                        f"    Estimated result size: {stage.estimated_result_size:,}\n"
+                    )
                     f.write(f"    Reduction factor: {stage.reduction_factor:.6f}\n\n")
 
             f.write(f"\nGenerated at: {output_path}\n")
 
     except Exception as e:
-        logger.error(f"Failed to write individual analysis report to {output_path}: {e}")
+        logger.error(
+            f"Failed to write individual analysis report to {output_path}: {e}"
+        )
 
 
 def analyze_all_plans(
     plans_path: pathlib.Path,
     data_path: pathlib.Path,
     data_format: str,
-    output_base_path: pathlib.Path
+    output_base_path: pathlib.Path,
 ) -> List[PlanAnalysis]:
     """Analyze all plan files in the plans directory."""
 
@@ -658,7 +750,9 @@ def analyze_all_plans(
     return analyses
 
 
-def aggregate_individual_analyses(base_output_path: pathlib.Path, plans_path: pathlib.Path) -> None:
+def aggregate_individual_analyses(
+    base_output_path: pathlib.Path, plans_path: pathlib.Path
+) -> None:
     """Aggregate individual analysis files into comprehensive reports."""
 
     logger.info("Aggregating individual analysis files...")
@@ -679,7 +773,7 @@ def aggregate_individual_analyses(base_output_path: pathlib.Path, plans_path: pa
             # Extract plan info from filename
             filename = analysis_file.stem
             # Format: analysis_plan_{id}_{pattern}_{granularity}
-            parts = filename.split('_')
+            parts = filename.split("_")
             if len(parts) >= 5:
                 plan_id = int(parts[2])
                 pattern = parts[3]
@@ -694,11 +788,15 @@ def aggregate_individual_analyses(base_output_path: pathlib.Path, plans_path: pa
                     analyses.append(analysis)
 
         except Exception as e:
-            logger.warning(f"Could not process individual analysis file {analysis_file.name}: {e}")
+            logger.warning(
+                f"Could not process individual analysis file {analysis_file.name}: {e}"
+            )
 
     # Generate comprehensive aggregated report
     if analyses:
         generate_analysis_report(analyses, base_output_path)
-        logger.info(f"Aggregated {len(analyses)} individual analyses into comprehensive reports")
+        logger.info(
+            f"Aggregated {len(analyses)} individual analyses into comprehensive reports"
+        )
     else:
         logger.warning("No valid analyses found to aggregate")

@@ -1,6 +1,0 @@
-# Execution Plan 1
-# Pattern for Fundamental Joins: random
-# Output Granularity: attribute
-# Relations in Plan Scope: R0, R1, R2
-# Attribute-at-a-Time Stages (Multi-way Joins per Attribute):
-attr1,R0,R1,R2

@@ -5,15 +5,19 @@ A research tool for generating synthetic database relations and join execution p
 ## Overview
 
 This project generates:
+
 - **Synthetic Relations**: Configurable datasets with various data distributions, null values, and domain constraints
-- **Join Execution Plans**: Fundamental join plans using different join patterns (random, star, chain, cyclic) with table-granularity and attribute-granularity outputs
+- **Join Execution Plans**: Fundamental join plans using different join patterns (random, star, chain, cyclic) with
+  table-granularity and attribute-granularity outputs
 - **Selectivity Analysis**: Comprehensive analysis of join selectivities, estimated result sizes, and reduction factors
 
-Originally developed for academic research comparing table-at-a-time binary joins vs. worst-case optimal join algorithms.
+Originally developed for academic research comparing table-at-a-time binary joins vs. worst-case optimal join
+algorithms.
 
 ## Features
 
 ### Data Generation
+
 - **Multiple distributions**: Uniform, Zipf, Normal
 - **Configurable parameters**: Domain size, null percentages, duplication factors
 - **Scalable generation**: Uses Dask for parallel processing
@@ -21,18 +25,21 @@ Originally developed for academic research comparing table-at-a-time binary join
 - **Reproducible**: Seed-based generation for consistent results
 
 ### Plan Generation
+
 - **Join patterns**: Random, Star, Chain, Cyclic join patterns
 - **Multiple granularities**: Table-at-a-time vs. attribute-at-a-time plans
 - **Visualization**: DOT graph generation for join patterns
 - **Flexible output**: Text and JSON plan formats
 
-### Selectivity Analysis ✨ NEW
+### Selectivity Analysis
+
 - **Join selectivity computation**: Analyzes actual data to compute join selectivities
 - **Result size estimation**: Estimates intermediate and final join result sizes
 - **Comprehensive reporting**: Text and JSON analysis reports
 - **Multiple metrics**: Reduction factors, distinct value overlaps, null handling
 
-### Configuration File Support ✨ NEW
+### Configuration File Support
+
 - **YAML configuration**: Use config files instead of long CLI commands
 - **CLI override**: Command-line arguments take precedence over config values
 - **Template configs**: Example configurations for common use cases
@@ -54,6 +61,7 @@ pip install -r requirements.txt
 ## Quick Start
 
 ### Using Command Line
+
 ```bash
 # Generate 5 relations with 4 attributes, 10K tuples each, and 2 plans per pattern
 python main.py --relations 5 --attributes 4 --unique-tuples 10000 \
@@ -66,6 +74,7 @@ python main.py --distribution zipf --skew 3.0 --domain-size 1000 \
 ```
 
 ### Using Configuration Files
+
 ```bash
 # Use a configuration file
 python main.py --config example_config.yaml
@@ -75,6 +84,7 @@ python main.py --config example_config.yaml --relations 10 --verbose
 ```
 
 ### Example Configuration File
+
 ```yaml
 # experiment_config.yaml
 relations: 5
@@ -86,8 +96,8 @@ domain-size: 1000
 null-percentage: 0.05
 
 plans: 3
-join-pattern: [\"random\", \"star\", \"chain\"]
-plan-granularity: [\"table\", \"attribute\"]
+join-pattern: [ \"random\", \"star\", \"chain\" ]
+plan-granularity: [ \"table\", \"attribute\" ]
 generate-dot-visualization: true
 
 run-analysis: true
@@ -97,6 +107,7 @@ verbose: true
 ## Command Line Options
 
 ### Data Generation
+
 - `--relations N`: Number of relations to generate (default: 3)
 - `--attributes M`: Number of attributes per relation (default: 3)
 - `--unique-tuples U`: Unique tuples per relation (default: 1000)
@@ -108,6 +119,7 @@ verbose: true
 - `--data-output-format {csv,json,parquet}`: Data file format (default: csv)
 
 ### Plan Generation
+
 - `--plans N`: Number of fundamental plans per pattern (default: 1)
 - `--join-pattern PATTERNS`: Join patterns to use (default: random)
 - `--plan-granularity {table,attribute}`: Plan output granularity (default: table)
@@ -116,13 +128,15 @@ verbose: true
 - `--generate-dot-visualization`: Generate DOT graph files
 
 ### Analysis
+
 - `--run-analysis`: Run selectivity analysis on generated data and plans
 
 ### Configuration
+
 - `--config CONFIG_FILE`: Path to YAML configuration file
 
-
 ### System
+
 - `--seed S`: Global random seed for reproducibility
 - `--base-output-dir PATH`: Base output directory (default: generated_output_dask)
 - `--dask-workers N`: Number of Dask workers
@@ -151,6 +165,7 @@ generated_output/
 The analysis feature generates comprehensive reports including:
 
 ### Text Report (`selectivity_analysis_report.txt`)
+
 ```
 PLAN 0 (random, table)
 Relations in Scope: R0, R1, R2
@@ -167,6 +182,7 @@ Join Details:
 ```
 
 ### JSON Data (`selectivity_analysis_data.json`)
+
 ```json
 {
   "plan_id": 0,
@@ -189,6 +205,7 @@ Join Details:
 ## Research Applications
 
 This tool is designed for:
+
 - **Join Algorithm Evaluation**: Compare performance of different join algorithms
 - **Query Optimization Research**: Test plan selection and cost estimation strategies
 - **Cardinality Estimation**: Evaluate estimation accuracy across data distributions
@@ -206,25 +223,29 @@ This tool is designed for:
 ## Extending the Tool
 
 ### Adding New Distributions
+
 ```python
-class CustomDistribution(DistributionStrategy):
+class CustomDistribution(DataDistribution):
     def generate_numpy_column(self, rng_numpy, num_values, domain_size, skew=None):
         # Your custom distribution logic
         return rng_numpy.custom_distribution(...)
 
+
 # Register in registries.py
-DISTRIBUTION_STRATEGIES["custom"] = CustomDistribution
+DISTRIBUTIONS["custom"] = CustomDistribution
 ```
 
 ### Adding New Join Patterns
+
 ```python
-class CustomJoinPattern(JoinPattern):
-    def generate_fundamental_joins(self, relations, num_attributes, py_random):
+class CustomPattern(JoinPattern):
+    def generate_fundamental_joins(self, relations, num_attrs, py_random):
         # Your join pattern logic
         return [(rel1, rel2, attr_idx), ...]
 
+
 # Register in registries.py
-JOIN_PATTERNS["custom"] = CustomJoinPattern
+JOIN_PATTERNS["custom"] = CustomPattern
 ```
 
 ## Performance Notes

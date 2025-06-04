@@ -1,29 +1,21 @@
-# registries.py
-"""
-Defines Abstract Base Classes (ABCs) for extensible components like
-data distributions, join patterns, and plan formatters, along with
-their concrete implementations and registries for dynamic dispatch.
-It also includes common dataclasses for plan structures.
-"""
-
-from abc import ABC, abstractmethod
-from typing import List, Tuple, Dict, Type, Any, Union, Optional, Set, cast
-from collections import defaultdict
-import numpy as np
 import random
-from dataclasses import dataclass, field
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import List, Tuple, Dict, Type, Any, Union, Optional, Set, cast
+
+import numpy as np
 
 
 # --- Common Dataclasses for Plan Structures ---
 @dataclass
-class DerivedPlanStage:
+class Stage:
     """Base class for a stage in a derived plan."""
 
     pass
 
 
 @dataclass
-class TablePlanStage(DerivedPlanStage):
+class TableStage(Stage):
     """Represents a stage in a table-granularity plan,
     aggregating joins between two tables."""
 
@@ -33,7 +25,7 @@ class TablePlanStage(DerivedPlanStage):
 
 
 @dataclass
-class AttributePlanStage(DerivedPlanStage):
+class AttributeStage(Stage):
     """Represents a stage in an attribute-granularity plan,
     focusing on a single attribute and all relations joining on it."""
 
@@ -42,25 +34,25 @@ class AttributePlanStage(DerivedPlanStage):
 
 
 @dataclass
-class DerivedPlanOutput:
+class Plan:
     """Holds the complete derived plan data ready for formatting."""
 
     plan_id: int
-    join_pattern_name: str
+    pattern: str
     granularity: str
-    selected_relations_in_scope: List[str]
-    stages: List[Union[TablePlanStage, AttributePlanStage]]
+    relations: List[str]
+    stages: List[Union[TableStage, AttributeStage]]
 
 
 # --- ABCs and Concrete Implementations ---
 
 
 # 1. Distribution Strategies (for data generation)
-class DistributionStrategy(ABC):
+class DataDistribution(ABC):
     """Abstract base class for data value distribution strategies."""
 
     @abstractmethod
-    def generate_numpy_column(
+    def generate_values(
         self,
         rng_numpy: np.random.Generator,
         num_values: int,
@@ -74,8 +66,8 @@ class DistributionStrategy(ABC):
         pass
 
 
-class UniformDistribution(DistributionStrategy):
-    def generate_numpy_column(
+class Uniform(DataDistribution):
+    def generate_values(
         self,
         rng_numpy: np.random.Generator,
         num_values: int,
@@ -87,8 +79,8 @@ class UniformDistribution(DistributionStrategy):
         )
 
 
-class ZipfDistribution(DistributionStrategy):
-    def generate_numpy_column(
+class Zipf(DataDistribution):
+    def generate_values(
         self,
         rng_numpy: np.random.Generator,
         num_values: int,
@@ -101,8 +93,8 @@ class ZipfDistribution(DistributionStrategy):
         return arr_clipped
 
 
-class NormalDistribution(DistributionStrategy):
-    def generate_numpy_column(
+class Normal(DataDistribution):
+    def generate_values(
         self,
         rng_numpy: np.random.Generator,
         num_values: int,
@@ -117,102 +109,99 @@ class NormalDistribution(DistributionStrategy):
         return arr_clipped
 
 
-# 2. Join Patterns (for fundamental plan generation)
 class JoinPattern(ABC):
     """Abstract base class for patterns that form fundamental join connections."""
 
     @abstractmethod
-    def generate_fundamental_joins(
+    def generate_joins(
         self,
-        selected_relations_in_scope: List[str],
-        num_attributes_per_relation: int,
+        relations: List[str],
+        num_attrs: int,
         py_random_instance: random.Random,
     ) -> List[Tuple[str, str, int]]:  # Returns (Rel1_sorted, Rel2_sorted, AttrIndex)
         pass
 
 
-class RandomJoinPattern(JoinPattern):
-    def generate_fundamental_joins(
+class RandomPattern(JoinPattern):
+    def generate_joins(
         self,
-        selected_relations_in_scope: List[str],
-        num_attributes: int,
+        relations: List[str],
+        num_attrs: int,
         py_random: random.Random,
     ) -> List[Tuple[str, str, int]]:
         joins_set: Set[Tuple[str, str, int]] = set()
-        if len(selected_relations_in_scope) >= 2:
-            temp_rels = list(selected_relations_in_scope)
+        if len(relations) >= 2:
+            temp_rels = list(relations)
             component = [temp_rels.pop(py_random.randrange(len(temp_rels)))]
             to_add = temp_rels[:]
             while to_add:
                 r1 = py_random.choice(component)
                 r2 = to_add.pop(py_random.randrange(len(to_add)))
-                attr_idx = py_random.randint(0, num_attributes - 1)
+                attr_idx = py_random.randint(0, num_attrs - 1)
                 joins_set.add(tuple(sorted((r1, r2))) + (attr_idx,))
                 component.append(r2)
         return sorted(list(joins_set))
 
 
-class StarJoinPattern(JoinPattern):
-    def generate_fundamental_joins(
+class StarPattern(JoinPattern):
+    def generate_joins(
         self,
-        selected_relations_in_scope: List[str],
-        num_attributes: int,
+        relations: List[str],
+        num_attrs: int,
         py_random: random.Random,
     ) -> List[Tuple[str, str, int]]:
         joins_set: Set[Tuple[str, str, int]] = set()
-        if len(selected_relations_in_scope) >= 2:
-            center = selected_relations_in_scope[0]
-            for other_rel in selected_relations_in_scope[1:]:
-                attr_idx = py_random.randint(0, num_attributes - 1)
+        if len(relations) >= 2:
+            center = relations[0]
+            for other_rel in relations[1:]:
+                attr_idx = py_random.randint(0, num_attrs - 1)
                 joins_set.add(tuple(sorted((center, other_rel))) + (attr_idx,))
         return sorted(list(joins_set))
 
 
-class ChainJoinPattern(JoinPattern):
-    def generate_fundamental_joins(
+class ChainPattern(JoinPattern):
+    def generate_joins(
         self,
-        selected_relations_in_scope: List[str],
-        num_attributes: int,
+        relations: List[str],
+        num_attrs: int,
         py_random: random.Random,
     ) -> List[Tuple[str, str, int]]:
         joins_set: Set[Tuple[str, str, int]] = set()
-        for i in range(len(selected_relations_in_scope) - 1):
-            r1, r2 = selected_relations_in_scope[i], selected_relations_in_scope[i + 1]
-            attr_idx = py_random.randint(0, num_attributes - 1)
+        for i in range(len(relations) - 1):
+            r1, r2 = relations[i], relations[i + 1]
+            attr_idx = py_random.randint(0, num_attrs - 1)
             joins_set.add(tuple(sorted((r1, r2))) + (attr_idx,))
         return sorted(list(joins_set))
 
 
-class CyclicJoinPattern(JoinPattern):
-    def generate_fundamental_joins(
+class CyclicPattern(JoinPattern):
+    def generate_joins(
         self,
-        selected_relations_in_scope: List[str],
-        num_attributes: int,
+        relations: List[str],
+        num_attrs: int,
         py_random: random.Random,
     ) -> List[Tuple[str, str, int]]:
         joins_set: Set[Tuple[str, str, int]] = set()
-        for i in range(len(selected_relations_in_scope) - 1):
-            r1, r2 = selected_relations_in_scope[i], selected_relations_in_scope[i + 1]
-            attr_idx = py_random.randint(0, num_attributes - 1)
+        for i in range(len(relations) - 1):
+            r1, r2 = relations[i], relations[i + 1]
+            attr_idx = py_random.randint(0, num_attrs - 1)
             joins_set.add(tuple(sorted((r1, r2))) + (attr_idx,))
-        if len(selected_relations_in_scope) > 1:
+        if len(relations) > 1:
             r_last, r_first = (
-                selected_relations_in_scope[-1],
-                selected_relations_in_scope[0],
+                relations[-1],
+                relations[0],
             )
-            attr_idx = py_random.randint(0, num_attributes - 1)
+            attr_idx = py_random.randint(0, num_attrs - 1)
             joins_set.add(tuple(sorted((r_last, r_first))) + (attr_idx,))
         return sorted(list(joins_set))
 
 
 # 3. Plan Formatters (for derived plan output)
-class PlanFormatter(ABC):
+class Formatter(ABC):
     """Abstract base class for formatting derived plan data."""
 
     @abstractmethod
-    def format_plan_body(
-        self, derived_plan: DerivedPlanOutput
-    ) -> Union[str, Dict[str, Any]]:
+    def format(self, derived_plan: Plan) -> Union[str, Dict[str, Any]]:
         """
         Formats the body/stages of the derived plan.
         Returns a string for text-based formats (body lines), or a dict for JSON (stages part).
@@ -221,8 +210,8 @@ class PlanFormatter(ABC):
         pass
 
 
-class TextPlanFormatter(PlanFormatter):
-    def format_plan_body(self, derived_plan: DerivedPlanOutput) -> str:
+class TextFormatter(Formatter):
+    def format(self, derived_plan: Plan) -> str:
         body_lines: List[str] = []
         if derived_plan.granularity == "table":
             body_lines.append(
@@ -231,7 +220,7 @@ class TextPlanFormatter(PlanFormatter):
             if not derived_plan.stages:
                 body_lines.append("# (No binary join stages to derive)")
             for stage_obj in derived_plan.stages:
-                stage = cast(TablePlanStage, stage_obj)
+                stage = cast(TableStage, stage_obj)
                 body_lines.append(
                     f"{stage.table1},{stage.table2},{','.join(stage.join_attributes)}"
                 )
@@ -242,18 +231,18 @@ class TextPlanFormatter(PlanFormatter):
             if not derived_plan.stages:
                 body_lines.append("# (No attribute stages to derive)")
             for stage_obj in derived_plan.stages:
-                stage = cast(AttributePlanStage, stage_obj)
+                stage = cast(AttributeStage, stage_obj)
                 body_lines.append(
                     f"{stage.join_on_attribute},{','.join(stage.participating_relations)}"
                 )
         return "\n".join(body_lines)
 
 
-class JSONPlanFormatter(PlanFormatter):
-    def format_plan_body(self, derived_plan: DerivedPlanOutput) -> Dict[str, Any]:
+class JSONFormatter(Formatter):
+    def format(self, derived_plan: Plan) -> Dict[str, Any]:
         json_stages_list = []
         for stage in derived_plan.stages:
-            if isinstance(stage, TablePlanStage):
+            if isinstance(stage, TableStage):
                 json_stages_list.append(
                     {
                         "table1": stage.table1,
@@ -261,7 +250,7 @@ class JSONPlanFormatter(PlanFormatter):
                         "join_attributes": stage.join_attributes,
                     }
                 )
-            elif isinstance(stage, AttributePlanStage):
+            elif isinstance(stage, AttributeStage):
                 json_stages_list.append(
                     {
                         "join_on_attribute": stage.join_on_attribute,
@@ -273,20 +262,20 @@ class JSONPlanFormatter(PlanFormatter):
 
 # --- Registries ---
 
-DISTRIBUTION_STRATEGIES: Dict[str, Type[DistributionStrategy]] = {
-    "uniform": UniformDistribution,
-    "zipf": ZipfDistribution,
-    "normal": NormalDistribution,
+DISTRIBUTIONS: Dict[str, Type[DataDistribution]] = {
+    "uniform": Uniform,
+    "zipf": Zipf,
+    "normal": Normal,
 }
 
 JOIN_PATTERNS: Dict[str, Type[JoinPattern]] = {
-    "random": RandomJoinPattern,
-    "star": StarJoinPattern,
-    "chain": ChainJoinPattern,
-    "cyclic": CyclicJoinPattern,
+    "random": RandomPattern,
+    "star": StarPattern,
+    "chain": ChainPattern,
+    "cyclic": CyclicPattern,
 }
 
-PLAN_FORMATTERS: Dict[str, Type[PlanFormatter]] = {
-    "txt": TextPlanFormatter,
-    "json": JSONPlanFormatter,
+FORMATTERS: Dict[str, Type[Formatter]] = {
+    "txt": TextFormatter,
+    "json": JSONFormatter,
 }

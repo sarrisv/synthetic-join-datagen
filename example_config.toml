@@ -14,7 +14,7 @@ null-percentage = 0.05
 data-output-format = "csv"
 
 [plan_generation]
-max-join-relations = null  # null means use all relationsplans = 5
+max-join-relations = 5
 join-pattern = ["random", "star", "chain", "cyclic"]
 plan-granularity = ["table", "attribute"]
 plan-output-format = ["txt", "json"]
