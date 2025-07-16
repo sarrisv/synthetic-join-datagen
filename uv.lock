@@ -473,10 +473,10 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "bokeh", specifier = "==3.8.0.dev1" },
+    { name = "bokeh", specifier = ">=3.8.0.dev1" },
     { name = "dask", extras = ["complete"], specifier = ">=2025.5.1" },
-    { name = "numpy", specifier = "==2.3.0rc1" },
-    { name = "pandas-stubs", specifier = "==2.2.3.250527" },
+    { name = "numpy", specifier = ">=2.3.0rc1" },
+    { name = "pandas-stubs", specifier = ">=2.2.3.250527" },
 ]
 
 [[package]]

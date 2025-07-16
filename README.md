@@ -1,273 +1,196 @@
-# Synthetic Join Data Generator
+# Synthetic Join Data & Plan Generator
 
-A research tool for generating synthetic database relations and join execution plans.
-
-## Overview
-
-This project generates:
-
-- **Synthetic Relations**: Configurable datasets with various data distributions, null values, and domain constraints
-- **Join Execution Plans**: Fundamental join plans using different join patterns (random, star, chain, cyclic) with
-  table-granularity and attribute-granularity outputs
-- **Selectivity Analysis**: Comprehensive analysis of join selectivities, estimated result sizes, and reduction factors
-
-Originally developed for academic research comparing table-at-a-time binary joins vs. worst-case optimal join
-algorithms.
+A configurable, parallelized tool for generating synthetic relational datasets, query execution plans, and join selectivity analysis. Designed for database testing, research, and benchmarking.
 
 ## Features
 
-### Data Generation
-
-- **Multiple distributions**: Uniform, Zipf, Normal
-- **Configurable parameters**: Domain size, null percentages, duplication factors
-- **Scalable generation**: Uses Dask for parallel processing
-- **Multiple output formats**: CSV, JSON, Parquet
-- **Reproducible**: Seed-based generation for consistent results
-
-### Plan Generation
-
-- **Join patterns**: Random, Star, Chain, Cyclic join patterns
-- **Multiple granularities**: Table-at-a-time vs. attribute-at-a-time plans
-- **Visualization**: DOT graph generation for join patterns
-- **Flexible output**: Text and JSON plan formats
-
-### Selectivity Analysis
-
-- **Join selectivity computation**: Analyzes actual data to compute join selectivities
-- **Result size estimation**: Estimates intermediate and final join result sizes
-- **Comprehensive reporting**: Text and JSON analysis reports
-- **Multiple metrics**: Reduction factors, distinct value overlaps, null handling
-
-### Configuration File Support
-
-- **YAML configuration**: Use config files instead of long CLI commands
-- **CLI override**: Command-line arguments take precedence over config values
-- **Template configs**: Example configurations for common use cases
+-   **Parallel Data Generation**: Uses Dask to efficiently generate large datasets across multiple cores.
+-   **Configurable Data Distributions**: Create realistic data with `uniform`, `zipf`, and `normal` distributions.
+-   **Rich Data Parameters**: Control the number of relations, attributes, tuple counts, duplication, domain size, and null percentages.
+-   **Versatile Join Patterns**: Generate plans using `star`, `chain`, `cyclic`, and `random` patterns.
+-   **Multiple Plan Granularities**: Output plans in both `table-at-a-time` (binary joins) and `attribute-at-a-time` (multi-way joins) formats.
+-   **On-the-Fly Analysis**: Automatically compute detailed join selectivity analysis as plans are generated.
+-   **Flexible Output Formats**:
+    -   Data: `csv`, `json`, `parquet`
+    -   Plans: `txt`, `json`
+-   **Reproducibility**: Use a global seed for fully reproducible generation runs.
+-   **Configuration Flexibility**: Manage runs via rich command-line arguments or a simple TOML configuration file.
+-   **Extensible Architecture**: Easily add new data distributions or join patterns via a registry system.
 
 ## Installation
 
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd DaskV2
+cd synthetic-join-datagen
 
-# Install dependencies using uv (recommended)
+# Install dependencies using uv
 uv sync
-
-# Or using pip
-pip install -r requirements.txt
 ```
 
 ## Quick Start
 
-### Using Command Line
+### 1. Using Command-Line Arguments
+
+This command generates a small dataset with 3 relations, runs on-the-fly analysis, and enables verbose logging.
 
 ```bash
-# Generate 5 relations with 4 attributes, 10K tuples each, and 2 plans per pattern
-python main.py --relations 5 --attributes 4 --unique-tuples 10000 \
-               --plans 2 --join-pattern random star \
-               --run-analysis
-
-# Generate with Zipf distribution and high skew
-python main.py --distribution zipf --skew 3.0 --domain-size 1000 \
-               --null-percentage 0.1 --run-analysis
+python src/main.py \
+    --relations 3 \
+    --unique-tuples 5000 \
+    --distribution zipf \
+    --dist-skew 1.5 \
+    --plans 5 \
+    --join-pattern star chain \
+    --plan-granularity table attribute \
+    --run-on-the-fly-analysis \
+    -v
 ```
 
-### Using Configuration Files
+### 2. Using a Configuration File
+
+For complex or reproducible runs, use a `TOML` configuration file.
+
+1.  Create a file named `config.toml`:
+
+    ```toml
+    # config.toml
+
+    [data]
+    relations = 5
+    attributes = 4
+    unique_tuples = 10000
+    distribution = "zipf"
+    dist_skew = 2.0
+    domain_size = 5000
+    null_percentage = 0.1
+    data_output_format = "parquet"
+
+    [plan]
+    plans = 10
+    join_pattern = ["star", "random"]
+    plan_granularity = ["table", "attribute"]
+    generate_dot_visualization = true
+
+    [analysis]
+    run_on_the_fly_analysis = true
+
+    [system]
+    seed = 12345
+    verbose = 1
+    ```
+
+2.  Run the generator with the config file:
+
+    ```bash
+    python src/main.py --config-file config.toml
+    ```
+
+    *Note: When using `--config-file`, only `--verbose` and `--log-file` can be used as additional command-line flags.*
+
+## Command-Line Reference
+
+The tool provides a comprehensive set of command-line arguments. For a full, up-to-date list of all options and their defaults, run:
 
 ```bash
-# Use a configuration file
-python main.py --config example_config.yaml
-
-# Override specific values from config
-python main.py --config example_config.yaml --relations 10 --verbose
+python src/main.py --help
 ```
-
-### Example Configuration File
-
-```yaml
-# experiment_config.yaml
-relations: 5
-attributes: 4
-unique-tuples: 10000
-distribution: "zipf"
-skew: 2.5
-domain-size: 1000
-null-percentage: 0.05
-
-plans: 3
-join-pattern: [ \"random\", \"star\", \"chain\" ]
-plan-granularity: [ \"table\", \"attribute\" ]
-generate-dot-visualization: true
-
-run-analysis: true
-verbose: true
-```
-
-## Command Line Options
-
-### Data Generation
-
-- `--relations N`: Number of relations to generate (default: 3)
-- `--attributes M`: Number of attributes per relation (default: 3)
-- `--unique-tuples U`: Unique tuples per relation (default: 1000)
-- `--duplication-factor D`: Tuple duplication factor (default: 1)
-- `--distribution {uniform,zipf,normal}`: Value distribution (default: normal)
-- `--skew S`: Skew parameter for Zipf distribution (default: 2.0)
-- `--domain-size MAX`: Maximum value for non-primary-key attributes (default: 1000)
-- `--null-percentage P`: Percentage of null values [0.0, 1.0) (default: 0.0)
-- `--data-output-format {csv,json,parquet}`: Data file format (default: csv)
-
-### Plan Generation
-
-- `--plans N`: Number of fundamental plans per pattern (default: 1)
-- `--join-pattern PATTERNS`: Join patterns to use (default: random)
-- `--plan-granularity {table,attribute}`: Plan output granularity (default: table)
-- `--max-join-relations MAX`: Maximum relations in plan scope (default: all)
-- `--plan-output-format {txt,json}`: Plan file format (default: txt)
-- `--generate-dot-visualization`: Generate DOT graph files
-
-### Analysis
-
-- `--run-analysis`: Run selectivity analysis on generated data and plans
-
-### Configuration
-
-- `--config CONFIG_FILE`: Path to YAML configuration file
-
-### System
-
-- `--seed S`: Global random seed for reproducibility
-- `--base-output-dir PATH`: Base output directory (default: generated_output_dask)
-- `--dask-workers N`: Number of Dask workers
-- `--dask-threads-per-worker N`: Threads per Dask worker
-- `--verbose`: Enable detailed logging
 
 ## Output Structure
 
+All generated files are placed in the `base_output_dir` (defaults to `generated_output/`).
+
 ```
 generated_output/
-├── data/                          # Generated relation files
+├── data/
 │   ├── R0.csv
 │   ├── R1.csv
 │   └── ...
-├── plans/                         # Generated plan files
-│   ├── plan_0_random_table.txt
-│   ├── plan_1_star_attribute.json
-│   ├── plan_2_chain_table_viz.dot
+├── plans/
+│   ├── plan_0_star_table.txt
+│   ├── plan_0_star_table.json
+│   ├── plan_1_random_attribute.txt
+│   ├── plan_1_random_attribute_viz.dot
 │   └── ...
-├── selectivity_analysis_report.txt   # Human-readable analysis report
-└── selectivity_analysis_data.json    # Machine-readable analysis data
+└── analysis/
+    ├── analysis_plan_0_star_table.json
+    ├── analysis_plan_1_random_attribute.json
+    ├── ...
+    ├── selectivity_analysis_report.txt      # Aggregated human-readable report
+    └── selectivity_analysis_data.json       # Aggregated machine-readable data
 ```
 
-## Selectivity Analysis Output
-
-The analysis feature generates comprehensive reports including:
-
-### Text Report (`selectivity_analysis_report.txt`)
-
-```
-PLAN 0 (random, table)
-Relations in Scope: R0, R1, R2
-Number of Joins: 2
-Average Selectivity: 0.8902
-
-Join Details:
-  R0 ⋈ R1 on attr1:
-    Table sizes: 1,000 × 1,000
-    Distinct values: 556 ∩ 550 = 492
-    Selectivities: 0.9260, 0.9380
-    Estimated join size: 2,204
-    Reduction factor: 0.002204
-```
-
-### JSON Data (`selectivity_analysis_data.json`)
-
-```json
-{
-  "plan_id": 0,
-  "pattern": "random",
-  "granularity": "table",
-  "joins": [
-    {
-      "table1": "R0",
-      "table2": "R1",
-      "join_attribute": "attr1",
-      "table1_selectivity": 0.926,
-      "table2_selectivity": 0.938,
-      "estimated_join_size": 2204,
-      "reduction_factor": 0.002204
-    }
-  ]
-}
-```
-
-## Research Applications
-
-This tool is designed for:
-
-- **Join Algorithm Evaluation**: Compare performance of different join algorithms
-- **Query Optimization Research**: Test plan selection and cost estimation strategies
-- **Cardinality Estimation**: Evaluate estimation accuracy across data distributions
-- **Distributed Join Processing**: Test join patterns across different partitioning schemes
-- **Selectivity Analysis**: Understand join behavior across different data patterns
+-   **`data/`**: Contains the generated relation data files (e.g., `R0.csv`).
+-   **`plans/`**: Contains the derived plan files (`.txt`, `.json`) and optional DOT visualizations (`.dot`).
+-   **`analysis/`**:
+    -   Individual `analysis_plan_*.json` files are created for each plan during the run.
+    -   At the end of a successful run, these are aggregated into `selectivity_analysis_report.txt` and `selectivity_analysis_data.json`.
 
 ## Architecture
 
-- **`main.py`**: CLI orchestration and Dask cluster management
-- **`data_generation_module.py`**: Parallel relation generation using Dask
-- **`plan_generation_module.py`**: Join plan generation and DOT visualization
-- **`analysis_module.py`**: Selectivity analysis and reporting ✨ NEW
-- **`registries.py`**: Extensible pattern implementations for distributions, join patterns, and formatters
+The project is organized into modular components:
+
+-   `main.py`: Main entry point, orchestrates the Dask cluster and generation workflow.
+-   `cli.py`: Defines the command-line interface using `argparse` and handles `TOML` configuration loading.
+-   `data_generation.py`: Contains the logic for generating relational data in parallel with Dask.
+-   `plan_generation.py`: Logic for generating base join patterns and deriving plans of different granularities.
+-   `analysis_module.py`: Core logic for computing join selectivities and aggregating results.
+-   `plan_structures.py`: Dataclasses defining the structure of Plans and Stages.
+-   `registries.py`: Central registry for `DataDistribution`, `JoinPattern`, and `Formatter` implementations, making the tool easily extensible.
 
 ## Extending the Tool
 
-### Adding New Distributions
+The use of registries makes it simple to add new functionality without modifying the core logic.
+
+### Adding a New Data Distribution
+
+1.  Create a new class that inherits from `DataDistribution`.
+2.  Implement the `generate_values` method.
+3.  Register your new class in `registries.py`.
 
 ```python
-class CustomDistribution(DataDistribution):
-    def generate_numpy_column(self, rng_numpy, num_values, domain_size, skew=None):
-        # Your custom distribution logic
-        return rng_numpy.custom_distribution(...)
+# In registries.py
 
+class MyCustomDistribution(DataDistribution):
+    def generate_values(self, rng, values, domain_size, dist_args=None):
+        # Your custom logic here
+        ...
 
-# Register in registries.py
-DISTRIBUTIONS["custom"] = CustomDistribution
+DISTRIBUTIONS["my_custom"] = MyCustomDistribution
 ```
 
-### Adding New Join Patterns
+### Adding a New Join Pattern
+
+1.  Create a new class that inherits from `JoinPattern`.
+2.  Implement the `generate_joins` method.
+3.  Register your new class in `registries.py`.
 
 ```python
-class CustomPattern(JoinPattern):
-    def generate_fundamental_joins(self, relations, num_attrs, py_random):
-        # Your join pattern logic
-        return [(rel1, rel2, attr_idx), ...]
+# In registries.py
 
+class MyCustomPattern(JoinPattern):
+    def generate_joins(self, rng, relations, num_attrs):
+        # Your custom logic here
+        ...
 
-# Register in registries.py
-JOIN_PATTERNS["custom"] = CustomPattern
+JOIN_PATTERNS["my_custom"] = MyCustomPattern
 ```
-
-## Performance Notes
-
-- Uses Dask for parallel processing - scales with available cores
-- Memory usage scales with `unique-tuples × relations × attributes`
-- Partition count affects memory usage and parallelism
-- Large domain sizes with high null percentages are most memory efficient
 
 ## Citation
 
-If you use this tool in your research, please cite:
+If you use this tool in your research, please consider citing it.
 
 ```bibtex
-@software{synthetic_join_datagen,
-  title={Synthetic Join Data Generator},
-  author={[Your Name]},
-  year={2024},
-  url={[Repository URL]}
+@software{synthetic_join_datagen_2025,
+  author = {Vasilis Sarris},
+  title = {{Synthetic Join Data & Plan Generator}},
+  year = {2025},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  url = {\url{https://github.com/sarrisv/synthetic-join-datagen}}
 }
 ```
 
 ## License
 
-[Add your license information here]
+[MIT License]

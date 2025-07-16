@@ -1,7 +1,7 @@
 [data_generation]
 relations = 10
 attributes = 7
-unique-tuples = 10000000
+unique-tuples = 1000
 duplication-factor = 1
 distribution = "normal"
 domain-size = 500
@@ -13,12 +13,8 @@ plans = 2
 join-pattern = ["random", "star"]
 plan-granularity = ["table", "attribute"]
 plan-output-format = ["txt"]
-generate-dot-visualization = false
+generate-dot-visualization = true
 
 [common]
 seed = 42
-verbosity = 2
-
-[analysis]
-run-analysis = false
-run-on-the-fly-analysis = false
+verbose = 2

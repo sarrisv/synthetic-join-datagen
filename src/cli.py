@@ -14,53 +14,44 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class GlobalCLIArgs:
-    # Data Generation Parameters
+class AppConfig:
     relations: int = 3
     attributes: int = 3
     unique_tuples: int = 1000
-    dup_factor: int = 1
+    duplication_factor: int = 1
     distribution: str = "normal"
-    skew: Optional[float] = 2
+    dist_skew: Optional[float] = None
+    dist_mean: Optional[float] = None
+    dist_std_dev: Optional[float] = None
+    dist_clip_mode: str = "center"
     domain_size: int = 1000
-    null_pct: float = 0.0
+    null_percentage: float = 0.0
     data_output_format: str = "csv"
-
-    # Execution Plan Generation Parameters
     plans: int = 1
     join_pattern: List[str] = field(default_factory=lambda: ["random"])
     plan_granularity: List[str] = field(default_factory=lambda: ["table"])
     max_join_relations: Optional[int] = None
     plan_output_format: List[str] = field(default_factory=lambda: ["txt"])
     generate_dot_visualization: bool = False
-
-    # Common Parameters
     seed: Optional[int] = None
     base_output_dir: pathlib.Path = field(
-        default_factory=lambda: pathlib.Path("generated_output")
+        default_factory=lambda: pathlib.Path("../generated_output")
     )
-    data_subdir_name: str = "data"
-    plan_subdir_name: str = "plans"
-    analysis_subdir_name: str = "analysis"
-
-    # Logging Parameters
+    data_subdir: str = "data"
+    plan_subdir: str = "plans"
+    analysis_subdir: str = "analysis"
     verbose: int = 0
     log_file: Optional[pathlib.Path] = None
-
-    # Dask Parameters
     dask_workers: Optional[int] = None
     dask_threads_per_worker: Optional[int] = None
     dask_memory_limit: Optional[str] = "auto"
     dask_partitions_per_relation: int = 0
-
-    # Analysis Parameters
-    run_analysis: bool = False
     run_on_the_fly_analysis: bool = False
 
 
 def get_arg_defaults() -> Dict[str, Any]:
     defaults = {}
-    for f in dataclasses.fields(GlobalCLIArgs):
+    for f in dataclasses.fields(AppConfig):
         if f.default is not dataclasses.MISSING:
             defaults[f.name] = f.default
         elif f.default_factory is not dataclasses.MISSING:
@@ -71,53 +62,76 @@ def get_arg_defaults() -> Dict[str, Any]:
 def add_data_group(parser: argparse.ArgumentParser) -> None:
     data_group = parser.add_argument_group("Data Generation Parameters")
     data_group.add_argument(
-        "--relations", type=int, metavar="N", help="Number of relations."
+        "--relations", type=int, metavar="COUNT", help="Number of relations."
     )
     data_group.add_argument(
         "--attributes",
         type=int,
-        metavar="M",
+        metavar="COUNT",
         help="Attributes per relation (attr0 is PK).",
     )
     data_group.add_argument(
         "--unique-tuples",
         type=int,
-        metavar="U",
+        metavar="COUNT",
         help="Unique tuples per relation.",
     )
     data_group.add_argument(
         "--duplication-factor",
+        dest="duplication_factor",
         type=int,
-        metavar="D",
+        metavar="FACTOR",
         help="Duplication factor (>=1).",
     )
     data_group.add_argument(
         "--distribution",
         choices=list(DISTRIBUTIONS.keys()),
-        help="Distribution for non-PKs.",
+        help="Distribution for non-PKs (non-primary key attributes).",
     )
     data_group.add_argument(
-        "--skew",
+        "--dist-skew",
+        dest="dist_skew",
         type=float,
-        metavar="S",
-        help="Skew 'a' for Zipf (>1.0). Default: 2.0 if Zipf.",
+        metavar="SKEW",
+        help="Skew 'a' for ZipfDistribution (>1.0). Default: 2.0.",
+    )
+    data_group.add_argument(
+        "--dist-mean",
+        dest="dist_mean",
+        type=float,
+        metavar="MEAN",
+        help="Mean for NormalDistribution. Default: domain_size / 2.",
+    )
+    data_group.add_argument(
+        "--dist-std-dev",
+        dest="dist_std_dev",
+        type=float,
+        metavar="STDDEV",
+        help="Standard deviation for NormalDistribution. Default: domain_size / 5.",
+    )
+    data_group.add_argument(
+        "--dist-clip-mode",
+        dest="dist_clip_mode",
+        choices=["center", "range"],
+        help="Clipping mode for NormalDistribution. 'center' clips around the mean, 'range' clips to [1, domain_size]. Default: 'center'.",
     )
     data_group.add_argument(
         "--domain-size",
         type=int,
-        metavar="MAX_V",
-        help="Max value for non-PKs [1, MAX_V].",
+        metavar="VALUE",
+        help="Maximum value for non-PK attributes in the domain [1, VALUE].",
     )
     data_group.add_argument(
         "--null-percentage",
+        dest="null_percentage",
         type=float,
-        metavar="P_N",
+        metavar="PERCENT",
         help="Null percentage [0.0, 1.0) for non-PKs.",
     )
     data_group.add_argument(
         "--data-output-format",
         choices=["csv", "json", "parquet"],
-        help="Format for data files.",
+        help="Output format for generated data files.",
     )
 
 
@@ -126,40 +140,41 @@ def add_plan_group(parser: argparse.ArgumentParser) -> None:
     plan_group.add_argument(
         "--plans",
         type=int,
-        metavar="N_P_PAT",
-        help="Fundamental plans per join pattern",
+        metavar="COUNT",
+        help="Base plans per join pattern",
     )
     plan_group.add_argument(
         "--join-pattern",
         nargs="+",
         choices=list(JOIN_PATTERNS.keys()),
-        metavar="PAT",
-        help="Fundamental join pattern/s",
+        metavar="PATTERN",
+        help="Base join pattern/s",
     )
     plan_group.add_argument(
         "--plan-granularity",
+        dest="plan_granularity",
         nargs="+",
         choices=["table", "attribute"],
-        metavar="GRAN",
+        metavar="TYPE",
         help="Output plan granularity/ies.",
     )
     plan_group.add_argument(
         "--max-join-relations",
         type=int,
-        metavar="MAX_R",
+        metavar="COUNT",
         help="Max relations in plan scope",
     )
     plan_group.add_argument(
         "--plan-output-format",
         nargs="+",
         choices=list(FORMATTERS.keys()),
-        metavar="PLAN_FMT",
+        metavar="FORMAT",
         help="Format(s) for derived plan files",
     )
     plan_group.add_argument(
         "--generate-dot-visualization",
         action="store_true",
-        help="Generate DOT viz of fundamental joins",
+        help="Generate DOT viz of base joins",
     )
 
 
@@ -168,37 +183,41 @@ def add_common_groups(parser: argparse.ArgumentParser) -> None:
     common_group.add_argument(
         "--seed",
         type=int,
-        metavar="S_VAL",
+        metavar="SEED_VAL",
         help="Global RNG seed",
     )
     common_group.add_argument(
         "--config-file",
         type=str,
-        metavar="CONFIG_FILE",
-        help="Path to TOML configuration file, CLI args override config values",
+        metavar="PATH",
+        help="Path to TOML config file. If used, no other configuration CLI arguments are allowed.",
     )
     common_group.add_argument(
         "--base-output-dir",
+        dest="base_output_dir",
         type=str,
         metavar="PATH",
         help="Base output directory",
     )
     common_group.add_argument(
         "--data-subdir",
+        dest="data_subdir",
         type=str,
-        metavar="SUB_D",
+        metavar="NAME",
         help="Subdirectory for data",
     )
     common_group.add_argument(
         "--plan-subdir",
+        dest="plan_subdir",
         type=str,
-        metavar="SUB_P",
+        metavar="NAME",
         help="Subdirectory for plans/DOTs",
     )
     common_group.add_argument(
         "--analysis-subdir",
+        dest="analysis_subdir",
         type=str,
-        metavar="SUB_A",
+        metavar="NAME",
         help="Subdirectory for analysis of plans",
     )
 
@@ -221,7 +240,8 @@ def add_dask_group(parser: argparse.ArgumentParser) -> None:
         help="Memory limit per Dask worker (e.g., '2GB', 'auto')",
     )
     dask_group.add_argument(
-        "--dask-num-data-partitions-per-relation",
+        "--dask-partitions-per-relation",
+        dest="dask_partitions_per_relation",
         type=int,
         help="Number of Dask partitions for each relation's unique tuple generation",
     )
@@ -238,7 +258,7 @@ def add_logging_group(parser: argparse.ArgumentParser) -> None:
     log_group.add_argument(
         "--log-file",
         type=pathlib.Path,
-        metavar="LOG_P",
+        metavar="PATH",
         help="Optional path for log file",
     )
 
@@ -246,36 +266,38 @@ def add_logging_group(parser: argparse.ArgumentParser) -> None:
 def add_analysis_groups(parser: argparse.ArgumentParser) -> None:
     analysis_group = parser.add_argument_group("Analysis Parameters")
     analysis_group.add_argument(
-        "--run-analysis",
-        action="store_true",
-        help="Run selectivity analysis on generated plans and data",
-    )
-    analysis_group.add_argument(
         "--run-on-the-fly-analysis",
         action="store_true",
         help="Run analysis for each plan as it's generated (creates individual analysis files)",
     )
 
 
-def load_config_file(config_path: pathlib.Path) -> Dict[str, Any] | None:
-    if config_path:
-        config_path = pathlib.Path(config_path)
+def load_config_file(config_path: pathlib.Path) -> Dict[str, Any]:
+    """Loads a TOML config file, flattens it, and prepares for dataclass instantiation."""
     try:
-        with open(config_path, "rb") as f:
+        with config_path.open("rb") as f:
             grouped_config = tomllib.load(f)
         logger.info(f"Loaded configuration from: {config_path}")
 
-        config = {}
-        if grouped_config:
-            for _, args_dict in grouped_config.items():
-                for k, v in args_dict.items():
-                    config[str(k).replace("-", "_")] = v
+        # Flatten the nested TOML structure and normalize keys
+        config = {
+            key.replace("-", "_"): value
+            for section in grouped_config.values()
+            for key, value in section.items()
+        }
 
-        if "base_output_dir" in config:
+        # Ensure Path objects are created for path-like strings
+        if "base_output_dir" in config and isinstance(config["base_output_dir"], str):
             config["base_output_dir"] = pathlib.Path(config["base_output_dir"])
         return config
+    except FileNotFoundError:
+        logger.error(f"Configuration file not found: {config_path}")
+        raise
+    except tomllib.TOMLDecodeError as e:
+        logger.error(f"Error decoding TOML file {config_path}: {e}")
+        raise
     except Exception as e:
-        logger.error(f"Failed to load config file {config_path}: {e}")
+        logger.error(f"Failed to load or process config file {config_path}: {e}")
         raise
 
 
@@ -285,11 +307,10 @@ def setup_logging(verbosity: int, log_file_path: Optional[pathlib.Path]) -> None
         logging.root.removeHandler(handler)
 
     # Set logging level
-    log_level = logging.NOTSET
-    if verbosity == 0:
-        log_level = logging.INFO
-    elif verbosity > 1:
+    if verbosity >= 1:
         log_level = logging.DEBUG
+    else:  # verbosity == 0
+        log_level = logging.INFO
     logging.getLogger().setLevel(log_level)
 
     # Setup logging to console
@@ -317,15 +338,25 @@ def setup_logging(verbosity: int, log_file_path: Optional[pathlib.Path]) -> None
             logger.error(f"Failed to set up file logging to {log_file_path}: {e}")
 
 
-def validate_args(args: GlobalCLIArgs) -> None:
+def validate_args(args: AppConfig) -> None:
     errors = []
 
-    if args.dup_factor < 1:
-        errors.append(f"--duplication-factor must be >= 1 (got {args.dup_factor}).")
-    if args.distribution == "zipf" and (args.skew is None or args.skew <= 1.0):
-        errors.append(f"--skew must be > 1.0 for Zipf distribution (got {args.skew}).")
-    if not (0.0 <= args.null_pct < 1.0):
-        errors.append(f"--null-percentage must be in [0.0, 1.0) (got {args.null_pct}).")
+    if args.duplication_factor < 1:
+        errors.append(
+            f"--duplication-factor must be >= 1 (got {args.duplication_factor})."
+        )
+    if (
+        args.distribution == "zipf"
+        and args.dist_skew is not None
+        and args.dist_skew <= 1.0
+    ):
+        errors.append(
+            f"--dist-skew must be > 1.0 for ZipfDistribution (got {args.dist_skew})."
+        )
+    if not (0.0 <= args.null_percentage < 1.0):
+        errors.append(
+            f"--null-percentage must be in [0.0, 1.0) (got {args.null_percentage})."
+        )
     if args.domain_size < 1:
         errors.append(f"--domain-size must be positive (got {args.domain_size}).")
     if args.relations < 1:
@@ -343,13 +374,20 @@ def validate_args(args: GlobalCLIArgs) -> None:
         sys.exit(1)
 
 
-def load_config() -> GlobalCLIArgs:
+class CustomHelpFormatter(
+    argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter
+):
+    """Allows for both default values and raw text formatting in help messages."""
+
+    pass
+
+
+def load_config() -> AppConfig:
     parser = argparse.ArgumentParser(
         description="Dataset and Execution Plan Generator",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        formatter_class=CustomHelpFormatter,
     )
 
-    # Add all the arguments, having it all here was too much
     add_data_group(parser)
     add_plan_group(parser)
     add_common_groups(parser)
@@ -357,35 +395,69 @@ def load_config() -> GlobalCLIArgs:
     add_logging_group(parser)
     add_analysis_groups(parser)
 
-    # Set defaults in the help message based on GlobalCLIArgs
+    argv = sys.argv[1:]
+    using_config_file = any(arg.startswith("--config-file") for arg in argv)
+
+    if using_config_file:
+        # Enforce that if --config-file is used, no other configuration arguments
+        # are allowed on the command line, except for control-flow flags like
+        # verbosity. This is done by manually inspecting sys.argv, as argparse
+        # doesn't easily expose which arguments were user-provided vs. defaults.
+        # Dynamically build a set of all configuration-related option strings (flags)
+        config_flags = set()
+        # These "control" flags are always allowed, even with a config file.
+        allowed_dests = {"config_file", "verbose", "log_file"}
+
+        for action in parser._actions:
+            if action.dest not in allowed_dests:
+                config_flags.update(action.option_strings)
+
+        found_conflicting_arg = None
+        for arg in argv:
+            # Match exact flags (e.g., '--seed') or flags with values ('--seed=123')
+            if any(arg == flag or arg.startswith(f"{flag}=") for flag in config_flags):
+                found_conflicting_arg = arg
+                break
+
+        if found_conflicting_arg:
+            parser.error(
+                f"argument {found_conflicting_arg} cannot be used with --config-file.\n\n"
+                "Please use either a configuration file OR command-line arguments for settings, but not both.\n"
+                "The only flags allowed with --config-file are --verbose (-v) and --log-file."
+            )
+
+    # --- If we passed the check, or if not using a config file, proceed with normal parsing ---
     parser.set_defaults(**get_arg_defaults())
-
-    # Parse any args provided via CLI, empty args are set to default value
     cli_args = parser.parse_args()
+    config: AppConfig
 
-    # Load config file, if provided
-    config_file_args = {}
     if cli_args.config_file:
+        # --- Config File Mode ---
         config_path = pathlib.Path(cli_args.config_file)
         if not config_path.exists():
             parser.error(f"Config file not found: {config_path}")
-        config_file_args = load_config_file(config_path)
 
-    # Merge CLI and config file args (config file takes precedence)
-    merged_args = {}
-    for f in dataclasses.fields(GlobalCLIArgs):
-        if f.name in config_file_args:
-            merged_args[f.name] = config_file_args[f.name]
-        else:
-            merged_args[f.name] = vars(cli_args)[f.name]
+        config_from_file = load_config_file(config_path)
 
-    if merged_args["seed"] is None:
-        merged_args["seed"] = random.randint(1, 2**32 - 1)
+        # Start with dataclass defaults and overlay with values from TOML file
+        final_config = get_arg_defaults()
+        if config_from_file:
+            final_config.update(config_from_file)
 
-    # Create instance of CLI arguments w/ parsed args
-    global_args = GlobalCLIArgs(**merged_args)
-    validate_args(global_args)
+        # Manually apply the allowed CLI args (e.g., logging) over the top
+        final_config["verbose"] = cli_args.verbose
+        final_config["log_file"] = cli_args.log_file
 
-    setup_logging(global_args.verbose, global_args.log_file)
+        config = AppConfig(**final_config)
+    else:
+        # --- CLI Arguments Mode ---
+        config = AppConfig(**vars(cli_args))
 
-    return global_args
+    # Common post-processing for both modes
+    if config.seed is None:
+        config.seed = random.randint(1, 2**32 - 1)
+
+    validate_args(config)
+    setup_logging(config.verbose, config.log_file)
+
+    return config
