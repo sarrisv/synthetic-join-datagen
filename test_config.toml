@@ -1,24 +1,32 @@
-[data_generation]
-relations = 10
-attributes = 7
-unique-tuples = 10000000
-duplication-factor = 1
-distribution = "normal"
-domain-size = 500
-null-percentage = 0.1
+# These settings in the [global] section apply to all iterations
+# unless they are explicitly overridden within an [[iterations]] block.
+[global]
+base_output_dir = "./generated_output"
 data-output-format = "csv"
-
-[plan_generation]
 plans = 2
 join-pattern = ["random", "star"]
 plan-granularity = ["table", "attribute"]
 plan-output-format = ["txt"]
-generate-dot-visualization = false
-
-[common]
+gen-dot-viz = true
+analyze = true
 seed = 42
-verbosity = 2
+relations = 3
+attributes = 2
+verbose = 4
+detailed-output = false
 
-[analysis]
-run-analysis = false
-run-on-the-fly-analysis = false
+[[iterations]]
+name = "1k_tuples_normal_dist"
+unique_tuples = 1000
+distribution = "normal"
+domain-size = 500
+null-percentage = 0.05
+
+[[iterations]]
+name = "10k_tuples_zipf_skew_4"
+unique_tuples = 10000
+distribution = "zipf"
+dist-skew = 4.0
+domain-size = 5000
+relations = 10
+null-percentage = 0.1
