@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# uv-generated files
+uv.lock
+
 # IDE directories
 .idea
 
