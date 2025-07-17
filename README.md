@@ -231,7 +231,3 @@ If you use this tool in your research, please consider citing it.
   url = {\url{https://github.com/sarrisv/synthetic-join-datagen}}
 }
 ```
-
-## License
-
-[MIT License]
