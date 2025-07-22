@@ -5,6 +5,7 @@ from multiprocessing import cpu_count
 from typing import List, Generator, Tuple, Dict, Any
 
 import dask
+import numpy as np
 from dask.distributed import LocalCluster, Client
 from dask.diagnostics import ProgressBar
 
@@ -128,16 +129,49 @@ def _create_relation_specs(
         )
 
         partitions_per_relation = config.dask_partitions_per_relation
+        cores = cpu_count()
         if partitions_per_relation <= 0: # Default to # of workers if not specified or invalid
-            partitions_per_relation = (
-                len(client.scheduler_info()["workers"]) if client else cpu_count()
-            )
+            workers = client.scheduler_info().get("workers", {})
+
+            if not workers:
+                partitions_per_relation = cores
+                logger.warning(
+                    f"Dask has no workers, defaulting partitions for {r_name} to cpu_count(): {partitions_per_relation}"
+                )
+            else:
+                first_worker_address = list(workers.keys())[0]
+                worker_memory = workers[first_worker_address].get("memory_limit", 0) # in bytes
+
+                rel_size = (
+                    config.unique_tuples
+                    * config.attributes
+                    * np.dtype(np.int64).itemsize
+                )
+
+                if rel_size > 0 and worker_memory > 0:
+                    # Aim for partitions to be around 128MB, seems like a good size
+                    target_partition_size = 128 * 1048576
+
+                    partitions_based_on_mem = int(
+                        np.ceil(rel_size / target_partition_size)
+                    )
+
+                    partitions_per_relation = max(
+                        len(workers), partitions_based_on_mem
+                    )
+                else:
+                    partitions_per_relation = len(workers)
+
+                logger.info(
+                    f"Calculated partitions for {r_name}: {partitions_per_relation} "
+                    f"(cores={cores}, est_size={rel_size / 1048576:.2f}MB)"
+                )
 
         # Assemble the specification for a single relation
         spec = RelationSpec(
             name=r_name,
-            num_attrs=config.attributes,
             unique_tuples=config.unique_tuples,
+            num_attrs=config.attributes,
             duplication_factor=config.duplication_factor,
             distribution=config.distribution,
             dist_args=dist_args,
